@@ -22,6 +22,8 @@
 
 The llama.cpp CANN backend is designed to support Ascend NPU. It utilize the ability of AscendC and ACLNN which are integrated to CANN Toolkit and kernels to using Ascend NPU directly.
 
+> **First-generation Ascend 310:** This guide describes the standard `GGML_CANN` backend and its supported CANN/Ascend combinations. In this fork, first-generation Ascend 310 with CANN 20.0.RC1 uses the separate, experimental `GGML_ASCEND310` legacy ACL backend. Its operation and shape support is narrower; see the [ASCEND310 backend guide](../../ggml/src/ggml-ascend310/README.md). Do not assume that a device listed here as 310P is interchangeable with Ascend 310.
+
 ## News
 
 - 2024.11

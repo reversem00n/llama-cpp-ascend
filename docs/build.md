@@ -613,6 +613,10 @@ llama_new_context_with_model:       CANN compute buffer size =  1260.81 MiB
 
 For detailed info, such as model/device supports, CANN install, please refer to [llama.cpp for CANN](./backend/CANN.md).
 
+### Legacy ACL backend for first-generation Ascend 310
+
+The `GGML_CANN` build above describes the standard CANN backend. This fork also provides a separate, experimental `GGML_ASCEND310` backend for first-generation Ascend 310 systems using the legacy ACL operator API supplied with CANN 20.0.RC1. It is not the same backend as the standard CANN path or the Ascend 310P path described in the CANN guide. See the [ASCEND310 backend README](../ggml/src/ggml-ascend310/README.md) for exact prerequisites, build commands, runtime setup, supported graph shapes, and known limitations.
+
 ## ZenDNN
 
 ZenDNN provides optimized deep learning primitives for AMD EPYC™ CPUs. It accelerates matrix multiplication operations for inference workloads.

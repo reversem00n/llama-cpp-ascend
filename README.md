@@ -79,7 +79,8 @@ The `llama.cpp` project is build on top of the [ggml](https://github.com/ggml-or
 | --- | --- |
 | [BLAS](docs/build.md#blas-build) | All |
 | [BLIS](docs/backend/BLIS.md) | All |
-| [CANN](docs/build.md#cann) | Ascend NPU |
+| [CANN](docs/build.md#cann) | Ascend NPUs supported by the standard CANN backend |
+| [ASCEND310 legacy ACL](ggml/src/ggml-ascend310/README.md) | First-generation Ascend 310 with CANN 20.0.RC1 |
 | [CUDA](docs/build.md#cuda) | Nvidia GPU |
 | [HIP](docs/build.md#hip) | AMD GPU |
 | [Hexagon](docs/backend/snapdragon/README.md) | Snapdragon |
@@ -94,6 +95,8 @@ The `llama.cpp` project is build on top of the [ggml](https://github.com/ggml-or
 | [Vulkan](docs/build.md#vulkan) | GPU |
 | [WebGPU](docs/build.md#webgpu) | All |
 | [ZenDNN](docs/build.md#zendnn) | AMD CPU |
+
+The legacy `ASCEND310` backend is separate from `GGML_CANN`: it targets Ascend 310 with the older ACL operator API and currently supports a narrower set of graph operations. See its [build, runtime, and limitation guide](ggml/src/ggml-ascend310/README.md) before selecting it.
 
 ## Documentation
 

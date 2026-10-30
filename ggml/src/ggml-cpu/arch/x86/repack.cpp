@@ -22,6 +22,16 @@
 #pragma GCC diagnostic ignored "-Woverlength-strings"
 #endif
 
+#if defined(__AVX__)
+// GCC 7 in the CANN 20.0 toolchain lacks these AVX convenience intrinsics.
+#ifndef _mm256_set_m128
+#define _mm256_set_m128(a, b) _mm256_insertf128_ps(_mm256_castps128_ps256(b), (a), 1)
+#endif
+#ifndef _mm256_set_m128i
+#define _mm256_set_m128i(a, b) _mm256_insertf128_si256(_mm256_castsi128_si256(b), (a), 1)
+#endif
+#endif
+
 #define UNUSED GGML_UNUSED
 
 #if defined(__AVX__)

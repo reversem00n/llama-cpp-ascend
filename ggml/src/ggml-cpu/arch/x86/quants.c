@@ -14,6 +14,13 @@
 #include <stdlib.h> // for qsort
 #include <stdio.h>  // for GGML_ASSERT
 
+#if defined(__AVX__)
+// GCC 7 in the CANN 20.0 toolchain does not provide this convenience intrinsic.
+#ifndef _mm256_set_m128
+#define _mm256_set_m128(a, b) _mm256_insertf128_ps(_mm256_castps128_ps256(b), (a), 1)
+#endif
+#endif
+
 #define GROUP_MAX_EPS 1e-15f
 #define GROUP_MAX_EPS_IQ3_XXS 1e-8f
 #define GROUP_MAX_EPS_IQ2_S 1e-8f

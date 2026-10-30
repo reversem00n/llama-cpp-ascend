@@ -598,6 +598,7 @@ endif()
 
 ggml_add_backend(BLAS)
 ggml_add_backend(CANN)
+ggml_add_backend(ASCEND310)
 ggml_add_backend(CUDA)
 ggml_add_backend(ET)
 ggml_add_backend(HIP)

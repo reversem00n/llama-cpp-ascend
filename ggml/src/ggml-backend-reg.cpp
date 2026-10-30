@@ -78,6 +78,10 @@
 #include "ggml-cann.h"
 #endif
 
+#ifdef GGML_USE_ASCEND310
+#include "ggml-ascend310.h"
+#endif
+
 #ifdef GGML_USE_ZENDNN
 #include "ggml-zendnn.h"
 #endif
@@ -155,6 +159,9 @@ struct ggml_backend_registry {
 #endif
 #ifdef GGML_USE_CANN
         register_backend(ggml_backend_cann_reg());
+#endif
+#ifdef GGML_USE_ASCEND310
+        register_backend(ggml_backend_ascend310_reg());
 #endif
 #ifdef GGML_USE_BLAS
         register_backend(ggml_backend_blas_reg());
@@ -511,7 +518,7 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent,
 
         for (const fs::directory_iterator end; dir_it != end; dir_it.increment(dir_ec)) {
             const auto & entry = *dir_it;
-            if (entry.is_regular_file(ec)) {
+            if (fs::is_regular_file(entry.path(), ec)) {
                 auto filename = entry.path().filename();
                 auto ext = entry.path().extension();
                 if (filename.native().find(file_prefix) == 0 && ext == file_extension) {

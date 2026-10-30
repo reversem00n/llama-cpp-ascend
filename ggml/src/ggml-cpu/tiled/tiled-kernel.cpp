@@ -8,6 +8,11 @@
 
 #if defined(__AVX512VNNI__) || defined(__AVX2__) || defined(__AVX__)
 #include <immintrin.h>
+
+// GCC 7 in the CANN 20.0 toolchain lacks this convenience intrinsic.
+#ifndef _mm256_set_m128i
+#define _mm256_set_m128i(a, b) _mm256_insertf128_si256(_mm256_castsi128_si256(b), (a), 1)
+#endif
 #endif
 
 

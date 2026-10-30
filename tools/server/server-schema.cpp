@@ -6,6 +6,11 @@
 
 namespace server_schema {
 
+template <typename T>
+static field_num<T> * make_field_num(const char * name, T & value) {
+    return new field_num<T>(name, value);
+}
+
 //
 // llama.cpp-specific completion schema
 //
@@ -39,41 +44,41 @@ std::vector<std::unique_ptr<field>> make_llama_cmpl_schema(const common_params &
     add((new field_bool("return_progress", params.return_progress))
         ->set_desc("Include prompt processing progress events in stream mode"));
 
-    add((new field_num("sse_ping_interval", params.sse_ping_interval))
+    add((make_field_num("sse_ping_interval", params.sse_ping_interval))
         ->set_hard_limits(-1, INT32_MAX)
         ->set_desc("Interval in seconds between SSE comment pings emitted while the stream stays silent, -1 disables pings"));
 
-    add((new field_num("n_predict", params.n_predict))
+    add((make_field_num("n_predict", params.n_predict))
         ->set_hard_limits(-1, INT32_MAX)
         ->add_alias("max_completion_tokens")
         ->add_alias("max_tokens")
         ->set_desc("Set the maximum number of tokens to predict. When 0, no tokens will be generated but the prompt is evaluated into the cache"));
 
-    add((new field_num("n_indent", params.n_indent))
+    add((make_field_num("n_indent", params.n_indent))
         ->set_hard_limits(0, INT32_MAX)
         ->set_desc("Specify the minimum line indentation for the generated text in number of whitespace characters. Useful for code completion tasks"));
 
-    add((new field_num("n_keep", params.n_keep))
+    add((make_field_num("n_keep", params.n_keep))
         ->set_hard_limits(-1, INT32_MAX)
         ->set_desc("Specify the number of tokens from the initial prompt to retain when context size is exceeded. Use -1 to retain all tokens from the prompt"));
 
-    add((new field_num("n_discard", params.n_discard))
+    add((make_field_num("n_discard", params.n_discard))
         ->set_hard_limits(0, INT32_MAX)
         ->set_desc("Number of tokens after n_keep that may be discarded when shifting context (0 = half context)"));
 
-    add((new field_num("n_cmpl", params.n_cmpl))
+    add((make_field_num("n_cmpl", params.n_cmpl))
         ->set_hard_limits(1, params_base.n_parallel)
         ->add_alias("n") // alias "n" as fallback (OpenAI completions API)
         ->set_desc("Number of completions to generate. If the input has multiple prompts, total outputs will be N prompts times n_cmpl"));
 
-    add((new field_num("n_cache_reuse", params.n_cache_reuse))
+    add((make_field_num("n_cache_reuse", params.n_cache_reuse))
         ->set_hard_limits(0, INT32_MAX)
         ->set_desc("Min chunk size to attempt reusing from the cache via KV shifting. See --cache-reuse arg"));
 
     // TODO: implement t_max_prompt_ms
-    // add((new field_num("t_max_prompt_ms", params.t_max_prompt_ms))
+    // add((make_field_num("t_max_prompt_ms", params.t_max_prompt_ms))
 
-    add((new field_num("t_max_predict_ms", params.t_max_predict_ms))
+    add((make_field_num("t_max_predict_ms", params.t_max_predict_ms))
         ->set_hard_limits(-1, std::numeric_limits<int64_t>::max())
         ->set_desc("Set a time limit in milliseconds for the prediction phase. The timeout triggers if generation exceeds this time (measured since the first token) and a newline has been generated. Useful for FIM applications"));
 
@@ -88,101 +93,101 @@ std::vector<std::unique_ptr<field>> make_llama_cmpl_schema(const common_params &
     // Sampling params
     //
 
-    add((new field_num("top_k", params.sampling.top_k))
+    add((make_field_num("top_k", params.sampling.top_k))
         ->set_limits(0, INT32_MAX)
         ->set_desc("Limit the next token selection to the K most probable tokens (0 = disabled)"));
 
-    add((new field_num("top_p", params.sampling.top_p))
+    add((make_field_num("top_p", params.sampling.top_p))
         ->set_limits(0.0f, 1.0f)
         ->set_desc("Limit the next token selection to a subset of tokens with cumulative probability above threshold P (1.0 = disabled)"));
 
-    add((new field_num("min_p", params.sampling.min_p))
+    add((make_field_num("min_p", params.sampling.min_p))
         ->set_limits(0.0f, 1.0f)
         ->set_desc("The minimum probability for a token to be considered, relative to the probability of the most likely token (0 = disabled)"));
 
-    add((new field_num("top_n_sigma", params.sampling.top_n_sigma))
+    add((make_field_num("top_n_sigma", params.sampling.top_n_sigma))
         ->set_desc("Keep tokens within n standard deviations of the top token logit (< 0 = disabled)"));
 
-    add((new field_num("xtc_probability", params.sampling.xtc_probability))
+    add((make_field_num("xtc_probability", params.sampling.xtc_probability))
         ->set_limits(0.0f, 1.0f)
         ->set_desc("Set the chance for token removal via XTC sampler (0 = disabled)"));
 
-    add((new field_num("xtc_threshold", params.sampling.xtc_threshold))
+    add((make_field_num("xtc_threshold", params.sampling.xtc_threshold))
         ->set_limits(0.0f, 1.0f)
         ->set_desc("Set a minimum probability threshold for tokens to be removed via XTC sampler (> 0.5 disables XTC)"));
 
-    add((new field_num("typical_p", params.sampling.typ_p))
+    add((make_field_num("typical_p", params.sampling.typ_p))
         // ->set_limits(0.0f, 1.0f) // what's the valid range?
         ->set_desc("Enable locally typical sampling with parameter p (1.0 = disabled)"));
 
-    add((new field_num("temperature", params.sampling.temp))
+    add((make_field_num("temperature", params.sampling.temp))
         ->set_limits(0.0f, std::numeric_limits<float>::infinity())
         ->set_desc("Adjust the randomness of the generated text (0 = greedy)"));
 
-    add((new field_num("dynatemp_range", params.sampling.dynatemp_range))
+    add((make_field_num("dynatemp_range", params.sampling.dynatemp_range))
         ->set_desc("Dynamic temperature range. The final temperature will be in [temperature - range, temperature + range] (0 = disabled)"));
 
-    add((new field_num("dynatemp_exponent", params.sampling.dynatemp_exponent))
+    add((make_field_num("dynatemp_exponent", params.sampling.dynatemp_exponent))
         ->set_desc("Dynamic temperature exponent, controls how entropy maps to temperature"));
 
-    add((new field_num("repeat_last_n", params.sampling.penalty_last_n))
+    add((make_field_num("repeat_last_n", params.sampling.penalty_last_n))
         ->set_hard_limits(0, INT32_MAX)
         ->set_desc("Last n tokens to consider for penalizing repetition (0 = disabled)"));
 
-    add((new field_num("repeat_penalty", params.sampling.penalty_repeat))
+    add((make_field_num("repeat_penalty", params.sampling.penalty_repeat))
         ->set_desc("Control the repetition of token sequences in the generated text (1.0 = disabled)"));
 
-    add((new field_num("frequency_penalty", params.sampling.penalty_freq))
+    add((make_field_num("frequency_penalty", params.sampling.penalty_freq))
         ->set_desc("Repeat alpha frequency penalty (0 = disabled)"));
 
-    add((new field_num("presence_penalty", params.sampling.penalty_present))
+    add((make_field_num("presence_penalty", params.sampling.penalty_present))
         ->set_desc("Repeat alpha presence penalty (0 = disabled)"));
 
-    add((new field_num("dry_multiplier", params.sampling.dry_multiplier))
+    add((make_field_num("dry_multiplier", params.sampling.dry_multiplier))
         ->set_desc("Set the DRY (Don't Repeat Yourself) repetition penalty multiplier (0 = disabled)"));
 
-    add((new field_num("dry_base", params.sampling.dry_base))
+    add((make_field_num("dry_base", params.sampling.dry_base))
         ->set_desc("Set the DRY repetition penalty base value (must be >= 1.0, any values < 1.0 will be replaced with the default value)")
         ->set_handler([&](field_eval_context & ctx, const json & data) {
             float v = data.at("dry_base").get<float>();
             ctx.params.sampling.dry_base = (v < 1.0f) ? params_base.sampling.dry_base : v;
         }));
 
-    add((new field_num("dry_allowed_length", params.sampling.dry_allowed_length))
+    add((make_field_num("dry_allowed_length", params.sampling.dry_allowed_length))
         ->set_hard_limits(0, INT32_MAX)
         ->set_desc("Tokens that extend repetition beyond this length receive exponentially increasing penalty: multiplier * base ^ (sequence_length - allowed_length)"));
 
-    add((new field_num("dry_penalty_last_n", params.sampling.dry_penalty_last_n))
+    add((make_field_num("dry_penalty_last_n", params.sampling.dry_penalty_last_n))
         ->set_hard_limits(0, INT32_MAX)
         ->set_desc("How many tokens to scan for repetitions (0 = disabled)"));
 
-    add((new field_num("mirostat", params.sampling.mirostat))
+    add((make_field_num("mirostat", params.sampling.mirostat))
         ->set_limits(0, 2)
         ->set_desc("Enable Mirostat sampling, controlling perplexity during text generation (0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)"));
 
-    add((new field_num("mirostat_tau", params.sampling.mirostat_tau))
+    add((make_field_num("mirostat_tau", params.sampling.mirostat_tau))
         ->set_desc("Set the Mirostat target entropy, parameter tau"));
 
-    add((new field_num("mirostat_eta", params.sampling.mirostat_eta))
+    add((make_field_num("mirostat_eta", params.sampling.mirostat_eta))
         ->set_desc("Set the Mirostat learning rate, parameter eta"));
 
-    add((new field_num("adaptive_target", params.sampling.adaptive_target))
+    add((make_field_num("adaptive_target", params.sampling.adaptive_target))
         ->set_limits(-std::numeric_limits<float>::max(), 1.0f)
         ->set_desc("Adaptive sampling target entropy (valid range 0.0 to 1.0; negative = disabled)"));
 
-    add((new field_num("adaptive_decay", params.sampling.adaptive_decay))
+    add((make_field_num("adaptive_decay", params.sampling.adaptive_decay))
         ->set_hard_limits(0.0f, 0.99f)
         ->set_desc("EMA decay for adaptive sampling; history approximates 1/(1-decay) tokens"));
 
     // seed is uint32_t; field_num uses int32_t so use a handler
-    add((new field_num("seed", params.sampling.seed))
+    add((make_field_num("seed", params.sampling.seed))
         ->set_desc("Set the random number generator (RNG) seed (-1 = random)"));
 
-    add((new field_num("n_probs", params.sampling.n_probs))
+    add((make_field_num("n_probs", params.sampling.n_probs))
         ->add_alias("logprobs") // use "logprobs" if "n_probs" wasn't provided
         ->set_desc("If greater than 0, output the probabilities of top N tokens for each generated token"));
 
-    add((new field_num("min_keep", params.sampling.min_keep))
+    add((make_field_num("min_keep", params.sampling.min_keep))
         ->set_hard_limits(0, INT32_MAX)
         ->set_desc("If greater than 0, force samplers to return at least N possible tokens"));
 
@@ -199,15 +204,15 @@ std::vector<std::unique_ptr<field>> make_llama_cmpl_schema(const common_params &
     // TODO: to keep things simple, we disable speculative parameter adjustments for now
 #if 0
     // TODO: for now, be able to adjust only the draft-model based speculative parameters
-    add((new field_num("speculative.n_max", params.speculative.draft.n_max))
+    add((make_field_num("speculative.n_max", params.speculative.draft.n_max))
         ->set_hard_limits(0, INT32_MAX)
         ->set_desc("Maximum number of tokens to draft during speculative decoding"));
 
-    add((new field_num("speculative.n_min", params.speculative.draft.n_min))
+    add((make_field_num("speculative.n_min", params.speculative.draft.n_min))
         ->set_hard_limits(0, INT32_MAX)
         ->set_desc("Minimum number of draft tokens to use for speculative decoding");
 
-    add((new field_num("speculative.p_min", params.speculative.draft.p_min))
+    add((make_field_num("speculative.p_min", params.speculative.draft.p_min))
         ->set_hard_limits(0.0f, 1.0f)
         ->set_desc("Minimum speculative decoding probability for draft tokens (0 = greedy)"));
 
@@ -218,13 +223,13 @@ std::vector<std::unique_ptr<field>> make_llama_cmpl_schema(const common_params &
             ctx.params.speculative.types = { common_speculative_type_from_name(data.at("speculative.type").get<std::string>()) };
         }));
 
-    add((new field_num("speculative.ngram_size_n", params.speculative.ngram_simple.size_n))
+    add((make_field_num("speculative.ngram_size_n", params.speculative.ngram_simple.size_n))
         ->set_desc("Ngram size for lookup in ngram-based speculative decoding"));
 
-    add((new field_num("speculative.ngram_size_m", params.speculative.ngram_simple.size_m))
+    add((make_field_num("speculative.ngram_size_m", params.speculative.ngram_simple.size_m))
         ->set_desc("Mgram size for speculative tokens in ngram-based speculative decoding"));
 
-    add((new field_num("speculative.ngram_min_hits", params.speculative.ngram_simple.min_hits))
+    add((make_field_num("speculative.ngram_min_hits", params.speculative.ngram_simple.min_hits))
         ->set_desc("Minimum hits at ngram lookup for mgram to be proposed"));
 #endif
 
@@ -351,7 +356,7 @@ std::vector<std::unique_ptr<field>> make_llama_cmpl_schema(const common_params &
     add((new field_bool("reasoning_control", params.sampling.reasoning_control))
         ->set_desc("Create the budget sampler on demand so reasoning can be ended at runtime"));
 
-    add((new field_num("reasoning_budget_tokens", params.sampling.reasoning_budget_tokens))
+    add((make_field_num("reasoning_budget_tokens", params.sampling.reasoning_budget_tokens))
         ->set_hard_limits(-1, INT32_MAX)
         ->set_desc("Number of tokens in the reasoning budget (-1 = disabled)"));
 
@@ -540,23 +545,23 @@ std::vector<std::unique_ptr<field>> make_tts_schema(server_task & task) {
         fields.emplace_back(f);
     };
 
-    add((new field_num("top_k", task.tts_inp.data.top_k))
+    add((make_field_num("top_k", task.tts_inp.data.top_k))
         ->set_limits(0, INT32_MAX)
         ->set_desc("Top-k for the acoustic code predictor, 0 to use the model default"));
 
-    add((new field_num("top_p", task.tts_inp.data.top_p))
+    add((make_field_num("top_p", task.tts_inp.data.top_p))
         ->set_limits(0.0f, 1.0f)
         ->set_desc("Top-p for the acoustic code predictor, 0.0 to use the model default"));
 
-    add((new field_num("seed", task.tts_inp.data.seed))
+    add((make_field_num("seed", task.tts_inp.data.seed))
         ->set_desc("RNG seed for the backbone sampler and the codec/vocoder (-1 = random)"));
 
-    add((new field_num("n_predict", task.params.n_predict))
+    add((make_field_num("n_predict", task.params.n_predict))
         ->set_hard_limits(-1, INT32_MAX)
         ->add_alias("max_tokens")
         ->set_desc("Max number of audio frames to generate"));
 
-    add((new field_num("repeat_penalty", task.params.sampling.penalty_repeat))
+    add((make_field_num("repeat_penalty", task.params.sampling.penalty_repeat))
         ->set_desc("Repetition penalty applied to the backbone sampler over the whole generation"));
 
     add((new field_bool("stream", task.params.stream))

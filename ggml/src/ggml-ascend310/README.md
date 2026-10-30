@@ -121,7 +121,7 @@ The server reported `n_ctx=131072`; the prompt itself was short. The run used Q4
 
 A separate short retrieval control used 175 API prompt tokens and returned HTTP 200 in 24.77 seconds, but answered `routine-ok` instead of the inserted marker `amber-pine-4827`. This retrieval check failed; the successful HTTP status is not evidence of answer correctness. An earlier Q4_K_M retrieval request with 3,030 API prompt tokens did return its inserted code, but took 313.59 seconds. Together, these small checks show that output correctness and latency vary with the request and that the backend remains experimental.
 
-The decode path now keeps a one-token MatMul at its measured-supported `N=1` shape instead of padding it to `N=16`. This cuts the decode operator's activation transfer and nominal matrix width by 16×; end-to-end speedup has not yet been measured and will be smaller because weights, CPU fallback operators, and per-op synchronization remain.
+For one-token decode, layer MatMuls with up to 6,144 output rows now use the target-tested `N=1` shape instead of padding to `N=16`, reducing their activation transfer and nominal matrix width by 16×. Very large vocabulary projections stay at `N=16`: the full model graph returned ACL status 100021 on that tiled operation with `N=1`. End-to-end speedup still requires measurement; CPU fallback operators and per-op synchronization remain.
 
 ### Full-context attempts
 

@@ -59,8 +59,11 @@ static const size_t ascend310_max_cached_weight_bytes = 4ULL * 1024 * 1024 * 102
 
 // Ascend 310 MatMul supports N=1 (verified on the target CANN runtime). Keep
 // decode at its true width; pad larger micro-batches to the kernel-friendly 16.
-static int64_t matmul_n_extent(int64_t n) {
-    return n == 1 ? 1 : ((n + 15) / 16) * 16;
+static int64_t matmul_n_extent(int64_t n, int64_t rows) {
+    // Exact N=1 works for normal layer matrices. A very large vocabulary
+    // projection failed in the target graph at a tiled output shape, so keep
+    // that operation on the known-stable N=16 path.
+    return n == 1 && rows <= 6144 ? 1 : ((n + 15) / 16) * 16;
 }
 
 static bool acl_ok(aclError status, const char * operation) {
@@ -303,7 +306,7 @@ static bool compute_matmul(ascend310_backend_context * ctx, ggml_tensor * dst) {
     const int64_t k = weights->ne[0];
     const int64_t m = weights->ne[1];
     const int64_t n = input->ne[1];
-    const int64_t n_exec = matmul_n_extent(n);
+    const int64_t n_exec = matmul_n_extent(n, m);
     const int64_t batches = input->ne[2] * input->ne[3];
     std::vector<uint16_t> a;
     std::vector<uint16_t> b;
@@ -447,7 +450,7 @@ static enum ggml_status graph_compute(ggml_backend_t backend, ggml_cgraph * grap
         const int64_t m = weights->ne[1];
         const int64_t k = weights->ne[0];
         const int64_t n = node->src[1]->ne[1];
-        const int64_t n_exec = matmul_n_extent(n);
+        const int64_t n_exec = matmul_n_extent(n, m);
         for (int64_t m_start = 0; m_start < m; m_start += ascend310_max_m_tile) {
             const int64_t tile_m = std::min(ascend310_max_m_tile, m - m_start);
             std::string model_dir;

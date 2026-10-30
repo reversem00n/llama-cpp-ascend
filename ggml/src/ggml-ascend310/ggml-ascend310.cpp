@@ -57,6 +57,12 @@ static bool atc_environment_prepared = false;
 static const int64_t ascend310_max_m_tile = 4096;
 static const size_t ascend310_max_cached_weight_bytes = 4ULL * 1024 * 1024 * 1024;
 
+// Ascend 310 MatMul supports N=1 (verified on the target CANN runtime). Keep
+// decode at its true width; pad larger micro-batches to the kernel-friendly 16.
+static int64_t matmul_n_extent(int64_t n) {
+    return n == 1 ? 1 : ((n + 15) / 16) * 16;
+}
+
 static bool acl_ok(aclError status, const char * operation) {
     if (status == ACL_ERROR_NONE) {
         return true;
@@ -297,7 +303,7 @@ static bool compute_matmul(ascend310_backend_context * ctx, ggml_tensor * dst) {
     const int64_t k = weights->ne[0];
     const int64_t m = weights->ne[1];
     const int64_t n = input->ne[1];
-    const int64_t n_padded = ((n + 15) / 16) * 16;
+    const int64_t n_exec = matmul_n_extent(n);
     const int64_t batches = input->ne[2] * input->ne[3];
     std::vector<uint16_t> a;
     std::vector<uint16_t> b;
@@ -310,19 +316,19 @@ static bool compute_matmul(ascend310_backend_context * ctx, ggml_tensor * dst) {
     std::vector<float> output((size_t) ggml_nelements(dst));
 
     for (int64_t batch = 0; batch < batches; ++batch) {
-        const size_t b_bytes = (size_t) n_padded * k * sizeof(uint16_t);
-        std::vector<uint16_t> padded_b((size_t) n_padded * k, 0);
+        const size_t b_bytes = (size_t) n_exec * k * sizeof(uint16_t);
+        std::vector<uint16_t> padded_b((size_t) n_exec * k, 0);
         std::copy_n(b.data() + (size_t) batch * n * k, (size_t) n * k, padded_b.data());
         for (int64_t m_start = 0; m_start < m; m_start += ascend310_max_m_tile) {
             const int64_t tile_m = std::min(ascend310_max_m_tile, m - m_start);
             std::string model_dir;
-            if (!compile_matmul(tile_m, k, n_padded, model_dir)) {
+            if (!compile_matmul(tile_m, k, n_exec, model_dir)) {
                 GGML_LOG_ERROR("ASCEND310: no offline MatMul model for M=%lld K=%lld N=%lld\n",
-                    (long long) tile_m, (long long) k, (long long) n_padded);
+                    (long long) tile_m, (long long) k, (long long) n_exec);
                 return false;
             }
             const size_t a_bytes = (size_t) tile_m * k * sizeof(uint16_t);
-            const size_t c_bytes = (size_t) tile_m * n_padded * sizeof(uint16_t);
+            const size_t c_bytes = (size_t) tile_m * n_exec * sizeof(uint16_t);
             acl_allocations buffers;
             void * da = has_cached_a ? const_cast<uint16_t *>(cached_a + (size_t) m_start * k) : nullptr;
             void * db = nullptr;
@@ -336,8 +342,8 @@ static bool compute_matmul(ascend310_backend_context * ctx, ggml_tensor * dst) {
             }
 
             const int64_t a_dims[] = {tile_m, k};
-            const int64_t b_dims[] = {n_padded, k};
-            const int64_t c_dims[] = {tile_m, n_padded};
+            const int64_t b_dims[] = {n_exec, k};
+            const int64_t c_dims[] = {tile_m, n_exec};
             aclTensorDesc * a_desc = aclCreateTensorDesc(ACL_FLOAT16, 2, a_dims, ACL_FORMAT_ND);
             aclTensorDesc * b_desc = aclCreateTensorDesc(ACL_FLOAT16, 2, b_dims, ACL_FORMAT_ND);
             aclTensorDesc * c_desc = aclCreateTensorDesc(ACL_FLOAT16, 2, c_dims, ACL_FORMAT_ND);
@@ -358,8 +364,8 @@ static bool compute_matmul(ascend310_backend_context * ctx, ggml_tensor * dst) {
                 ok = acl_ok(aclopExecute("MatMul", 2, input_desc, input_buf, 1, output_desc, output_buf, attrs, ctx->stream), "aclopExecute(MatMul)") &&
                      acl_ok(aclrtSynchronizeStream(ctx->stream), "synchronize MatMul");
                 if (!ok) {
-                    GGML_LOG_ERROR("ASCEND310: MatMul model M=%lld K=%lld N=%lld (padded N=%lld, tile offset=%lld), input types=%s/%s; input ne=[%lld,%lld,%lld,%lld], batches=%lld; descriptor bytes=%zu/%zu/%zu, buffer bytes=%zu/%zu/%zu\n",
-                        (long long) tile_m, (long long) k, (long long) n, (long long) n_padded, (long long) m_start,
+                    GGML_LOG_ERROR("ASCEND310: MatMul model M=%lld K=%lld N=%lld (model N=%lld, tile offset=%lld), input types=%s/%s; input ne=[%lld,%lld,%lld,%lld], batches=%lld; descriptor bytes=%zu/%zu/%zu, buffer bytes=%zu/%zu/%zu\n",
+                        (long long) tile_m, (long long) k, (long long) n, (long long) n_exec, (long long) m_start,
                         ggml_type_name(weights->type), ggml_type_name(input->type),
                         (long long) input->ne[0], (long long) input->ne[1],
                         (long long) input->ne[2], (long long) input->ne[3], (long long) batches,
@@ -367,7 +373,7 @@ static bool compute_matmul(ascend310_backend_context * ctx, ggml_tensor * dst) {
                         a_bytes, b_bytes, c_bytes);
                 }
             }
-            std::vector<uint16_t> half_out((size_t) tile_m * n_padded);
+            std::vector<uint16_t> half_out((size_t) tile_m * n_exec);
             if (ok) {
                 ok = acl_ok(aclrtMemcpy(half_out.data(), c_bytes, dc, c_bytes, ACL_MEMCPY_DEVICE_TO_HOST), "copy MatMul output");
             }
@@ -384,7 +390,7 @@ static bool compute_matmul(ascend310_backend_context * ctx, ggml_tensor * dst) {
             for (int64_t row = 0; row < tile_m; ++row) {
                 for (int64_t col = 0; col < n; ++col) {
                     output[(size_t) batch * m * n + (size_t) col * m + m_start + row] =
-                        ggml_fp16_to_fp32(half_out[(size_t) row * n_padded + col]);
+                        ggml_fp16_to_fp32(half_out[(size_t) row * n_exec + col]);
                 }
             }
         }
@@ -427,8 +433,8 @@ static enum ggml_status graph_compute(ggml_backend_t backend, ggml_cgraph * grap
     std::lock_guard<std::mutex> lock(ascend310_mutex);
 
     // CANN 20.0 loads its offline operator-model index when aclopSetModelDir is
-    // first called. Compile every shape in this graph, plus the padded decode
-    // shape, before installing the model directory; ATC files added afterward
+    // first called. Compile every dispatched graph shape, including exact N=1
+    // decode, before installing the model directory; ATC files added afterward
     // are not visible to this process and aclopSetModelDir cannot be repeated.
     for (int i = 0; i < graph->n_nodes; ++i) {
         ggml_tensor * node = graph->nodes[i];
@@ -441,14 +447,13 @@ static enum ggml_status graph_compute(ggml_backend_t backend, ggml_cgraph * grap
         const int64_t m = weights->ne[1];
         const int64_t k = weights->ne[0];
         const int64_t n = node->src[1]->ne[1];
-        const int64_t n_padded = ((n + 15) / 16) * 16;
+        const int64_t n_exec = matmul_n_extent(n);
         for (int64_t m_start = 0; m_start < m; m_start += ascend310_max_m_tile) {
             const int64_t tile_m = std::min(ascend310_max_m_tile, m - m_start);
             std::string model_dir;
-            if (!compile_matmul(tile_m, k, n_padded, model_dir) ||
-                (n_padded != 16 && !compile_matmul(tile_m, k, 16, model_dir))) {
+            if (!compile_matmul(tile_m, k, n_exec, model_dir)) {
                 GGML_LOG_ERROR("ASCEND310: failed to prepare MatMul model M=%lld K=%lld N=%lld\n",
-                    (long long) tile_m, (long long) k, (long long) n_padded);
+                    (long long) tile_m, (long long) k, (long long) n_exec);
                 return GGML_STATUS_FAILED;
             }
         }

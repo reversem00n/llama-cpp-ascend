@@ -121,6 +121,8 @@ The server reported `n_ctx=131072`; the prompt itself was short. The run used Q4
 
 A separate short retrieval control used 175 API prompt tokens and returned HTTP 200 in 24.77 seconds, but answered `routine-ok` instead of the inserted marker `amber-pine-4827`. This retrieval check failed; the successful HTTP status is not evidence of answer correctness. An earlier Q4_K_M retrieval request with 3,030 API prompt tokens did return its inserted code, but took 313.59 seconds. Together, these small checks show that output correctness and latency vary with the request and that the backend remains experimental.
 
+The decode path now keeps a one-token MatMul at its measured-supported `N=1` shape instead of padding it to `N=16`. This cuts the decode operator's activation transfer and nominal matrix width by 16×; end-to-end speedup has not yet been measured and will be smaller because weights, CPU fallback operators, and per-op synchronization remain.
+
 ### Full-context attempts
 
 - **Q4_K_M weights, default F16 KV cache:** the server accepted a 131,072-token context configuration. A 128,705-token retrieval request reached 16,736 processed prompt tokens (~13%) after about 57 minutes, at a last observed prefill rate of 4.85 tokens/s. The request was stopped before completion, so this is not a full-context pass and has no final answer or TTOT.

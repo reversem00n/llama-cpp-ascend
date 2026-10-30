@@ -98,14 +98,44 @@ npu-smi info
 
 An HTTP success response by itself does not prove NPU execution; confirm that `npu-smi` shows NPU memory or AICore activity while inference runs.
 
-## Validation and known limitations
+## Validation and measured performance
 
-The [MiniCPM5-2B model card](https://huggingface.co/openbmb/MiniCPM5-2B) advertises a native context length of 131,072 tokens. That is a model limit, not a guarantee that this backend can run the full window efficiently. The initial validation used a Huawei AI1S VM with Ascend 310 (8 GiB), CANN 20.0.RC1, and the `MiniCPM5-2B-Q4_K_M.gguf` model. A retrieval prompt with 3,030 prompt tokens completed with HTTP 200 in 313.6 seconds and returned the code placed near the end of the prompt. `npu-smi` showed about 6,389 / 8,192 MiB in use and AICore activity during execution. This is a functional long-context check, not a performance target; the run was slow.
+The model card for [MiniCPM5-2B](https://huggingface.co/openbmb/MiniCPM5-2B) advertises a native context length of 131,072 tokens. This is a model limit, not a guarantee that this backend can process a prompt of that size on a given machine.
 
-- This backend is experimental and currently supports only the eligible matrix-multiplication subset above; it is not a general replacement for the standard CANN backend.
-- Tested CANN 20.0.RC1 can report AICore exceptions and a device health state of `Warning` after unsupported operator shapes are submitted. Confirm correctness with a known-answer request, inspect service logs, and monitor `npu-smi` rather than treating a successful build as sufficient validation.
-- On the tested legacy runtime, a one-shot CLI process can print a correct answer and then abort during CANN/HDC teardown. The long-lived `llama-server` service remained available and answered HTTP requests. This teardown issue is not proof that every process exit is clean.
-- The `test-backend-ops` executable did not link on the tested legacy build because its link command omitted pthread (`pthread_create ... DSO missing from command line`). The CLI and server targets did build; this document does not claim that the full backend test suite passes.
+Validation was performed on a Huawei AI1S VM with Ascend 310 (8 GiB), CANN 20.0.RC1, and the `MiniCPM5-2B-Q4_K_M.gguf` weights. The backend is experimental: supported matrix multiplications ran on the NPU while unsupported graph operations may fall back to CPU. All figures below are single-request observations, not stable performance guarantees.
+
+### Short prompt with maximum context configured
+
+The server reported `n_ctx=131072`; the prompt itself was short. The run used Q4_K_M weights, `--gpu-layers 99`, `--device ASCEND3100`, `--no-kv-offload`, Q8 KV cache (`--cache-type-k q8_0 --cache-type-v q8_0`), batch/ubatch 16, and one parallel slot. Because KV offload was disabled, the KV cache remained on host memory. The request generated a numbered list and reached the 128-token output limit.
+
+| Measurement | Observed result |
+| --- | ---: |
+| Prompt tokens reported by the API | 35 |
+| Completion tokens | 128 |
+| Prefill | 5,421.74 ms; 6.46 tokens/s |
+| Decode | 365,893.27 ms; 0.35 tokens/s |
+| Total server time | 371,315.01 ms |
+| HTTP total time | 371.34 s |
+| NPU memory during request | 6,389 / 8,192 MiB |
+| Sampled AICore utilization | 12–26% |
+
+A separate short retrieval control used 175 API prompt tokens and returned HTTP 200 in 24.77 seconds, but answered `routine-ok` instead of the inserted marker `amber-pine-4827`. This retrieval check failed; the successful HTTP status is not evidence of answer correctness. An earlier Q4_K_M retrieval request with 3,030 API prompt tokens did return its inserted code, but took 313.59 seconds. Together, these small checks show that output correctness and latency vary with the request and that the backend remains experimental.
+
+### Full-context attempts
+
+- **Q4_K_M weights, default F16 KV cache:** the server accepted a 131,072-token context configuration. A 128,705-token retrieval request reached 16,736 processed prompt tokens (~13%) after about 57 minutes, at a last observed prefill rate of 4.85 tokens/s. The request was stopped before completion, so this is not a full-context pass and has no final answer or TTOT.
+- **Q8_0 weights at 131,072 context:** startup failed with `std::bad_alloc`; inference did not start on this VM.
+- **Q4_K_M weights, Q8 KV cache:** a short-prompt request succeeded while the server was configured for 131,072 context, as reported above. This does not demonstrate that a 128K prompt fits or completes.
+
+The 8 GiB NPU and limited host RAM constrain this setup. `--no-kv-offload` keeps KV data on the CPU and can reduce NPU memory use, but it does not make prefill fast; quantizing weights and quantizing the KV cache are separate choices. The measured 0.35-token/s decode rate and the incomplete full-window request make this unsuitable as a latency target.
+
+## Known limitations
+
+- This backend is experimental and supports only the eligible `GGML_OP_MUL_MAT` subset described above; it is not a general replacement for the standard CANN backend.
+- Ascend 310P, 910, 910B, and 910C are not covered by this backend or these results.
+- The tested CANN 20.0.RC1 runtime can report AICore exceptions and NPU health `Warning` after unsupported operator shapes are submitted. Validate output, inspect service logs, and monitor `npu-smi`.
+- A one-shot CLI process can print a correct answer and then abort during CANN/HDC teardown. The long-lived `llama-server` service answered HTTP requests; this does not establish clean teardown for every process.
+- The `test-backend-ops` executable did not link on the tested legacy build because its link command omitted pthread (`pthread_create ... DSO missing from command line`). The CLI and server targets built, but the full backend test suite is not verified on that toolchain.
 - Flash Attention is not supported by this CANN 20 / Ascend 310 combination and is disabled by the runtime.
 
-The upstream CANN backend and its own model/device matrix are documented in [docs/backend/CANN.md](../../../docs/backend/CANN.md). Please report the exact NPU model, driver version, toolkit version, model format, failing operation shape, and relevant log excerpt when filing an issue about this legacy path.
+The upstream CANN backend and its own model/device matrix are documented in [docs/backend/CANN.md](../../../docs/backend/CANN.md). When reporting an issue, include the exact NPU model, driver and toolkit versions, model format, failing operation shape, and relevant log excerpt.

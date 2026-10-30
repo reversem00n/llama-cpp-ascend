@@ -98,6 +98,12 @@ The `llama.cpp` project is build on top of the [ggml](https://github.com/ggml-or
 
 The legacy `ASCEND310` backend is separate from `GGML_CANN`: it targets Ascend 310 with the older ACL operator API and currently supports a narrower set of graph operations. See its [build, runtime, and limitation guide](ggml/src/ggml-ascend310/README.md) before selecting it.
 
+### Ascend 310 validation snapshot
+
+The experimental legacy backend was exercised on a Huawei AI1S VM with an 8 GiB Ascend 310 and CANN 20.0.RC1. A short MiniCPM5-2B Q4_K_M request ran with the server context configured to 131,072 and Q8 KV cache: 35 prompt tokens, **6.46 prompt tokens/s**, **0.35 generated tokens/s**, and **371.34 s** total for 128 generated tokens. `npu-smi` showed 12–26% AICore activity and 6,389 / 8,192 MiB NPU memory in use. The complete configuration and limits are in the [Ascend 310 validation notes](ggml/src/ggml-ascend310/README.md).
+
+This was a short-prompt throughput sample, not a full-window inference. A 128,705-token request stopped at the last observed 16,736 tokens (~13%) after about 57 minutes; full-context completion is not validated. The Q8-weight full-context startup also failed with `std::bad_alloc` on this VM. Do not interpret the advertised 131,072-token model context or a server configured to that size as proof that a prompt of that length completes on this hardware.
+
 ## Documentation
 
 #### Tools
